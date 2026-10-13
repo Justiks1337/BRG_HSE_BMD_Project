@@ -3,12 +3,13 @@ import logging
 import os
 
 from aiogram import Dispatcher
+from dotenv import load_dotenv
 
 from telegram import Bot
 from telegram.handlers import router
 
-
 async def main() -> None:
+    load_dotenv()
     token = os.getenv("BOT_TOKEN")
     if not token:
         raise RuntimeError("Задайте переменную окружения BOT_TOKEN")

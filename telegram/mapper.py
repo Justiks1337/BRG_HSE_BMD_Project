@@ -1,6 +1,6 @@
 from aiogram.types import CallbackQuery, Message
 
-from core.proxy import CallbackQueryProxy, MessageProxy
+from core.proxy.proxy_objects import CallbackQueryProxy, MessageProxy
 
 
 class Mapper:

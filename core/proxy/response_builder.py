@@ -1,6 +1,6 @@
 from io import BytesIO
 
-from .proxy import ButtonProxy, ResponseProxy
+from core.proxy.proxy_objects import ButtonProxy, ResponseProxy
 
 
 class ResponseBuilder:

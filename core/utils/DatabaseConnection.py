@@ -56,6 +56,35 @@ class DatabaseConnection(Singleton):
 
         await self.connection.commit()
 
+    async def add_user(self, user_id: int) -> None:
+        """
+        Создать нового пользователя в базе данных.
+        Может вызывать sqlite3.IntegrityError: constraint failed, в случае, если пользователь уже существует
+        Обязательно проверяйте наличие пользователя в базе данных, перед использованием данного метода
+        :param user_id: int, ID пользователя
+        :return: None
+        """
+        async with self.connection.execute("""
+            INSERT INTO users VALUES (?)
+        """, (user_id, )
+        ):
+            pass
+
+        await self.connection.commit()
+
+    async def user_exists(self, user_id: int) -> bool:
+        """
+        Узнать наличие пользователя в базе данных по user_id
+        :param user_id: int, ID пользователя
+        :return: True, если пользователь существует, ианче False
+        """
+        async with self.connection.execute("""
+            SELECT COUNT(*) FROM users WHERE user_id = ?
+        """, (user_id, )) as cursor:
+            result = (await cursor.fetchone())[0]
+
+            return result == 1
+
     async def get_connection(self):
         self.connect = await aiosqlite.connect(os.environ["DATABASE_NAME"])
         await self.create_tables()
