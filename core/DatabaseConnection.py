@@ -1,0 +1,76 @@
+from typing import Optional
+import os
+
+import aiosqlite
+from dotenv import load_dotenv
+
+from singleton import Singleton
+
+
+load_dotenv()
+
+
+class DatabaseConnection(Singleton):
+    """Обеспечивает взаимодействие с БД через единственный экземпляр.
+
+    Использует паттерн Singleton. Инициализируйте объект и откройте соединение
+    через get_connection перед запуском основной обработки сообщений.
+    При завершении приложения закройте соединение методом close.
+
+    Все операции взаимодействия с базой данных должны быть реализованы
+    исключительно в этом классе. Он хранит запрещённые и доверенные
+    сообщения, предупреждения и время регистрации участников.
+    """
+
+    def init(self):
+        self.connect: Optional[aiosqlite.Connection] = None
+
+    @property
+    def connection(self) -> aiosqlite.Connection:
+        connection = self.connect
+        if connection is None:
+            raise RuntimeError("Соединение с БД не открыто или уже закрыто")
+        return connection
+
+    async def create_tables(self) -> None:
+        """
+        Создание таблиц нужных для работы бота
+        :return: None
+        """
+        async with self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY
+            ) 
+        """):
+            pass
+
+        async with self.connection.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                user_id INTEGER NOT NULL ,
+                task_number INTEGER NOT NULL, 
+                FOREIGN KEY (user_id) 
+                REFERENCES users(user_id)
+            )
+        """):
+            pass
+
+        await self.connection.commit()
+
+    async def get_connection(self):
+        self.connect = await aiosqlite.connect(os.environ["DATABASE_NAME"])
+        await self.create_tables()
+
+
+    async def close(self):
+        """
+        Закрытие сессии aiosqlite
+        Так как сессия открывается один раз при запуске бота, она никогда не закрывается
+        Из-за этого процесс нужно очень неаккуратно убивать.
+
+        Это плохая практика, поэтому вызывайте это перед завершением процесса
+        :return: None
+        """
+
+        if self.connect is not None:
+            await self.connect.close()
+            self.connect = None
