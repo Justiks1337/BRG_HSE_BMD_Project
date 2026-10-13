@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from io import BytesIO
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,3 +43,35 @@ class CallbackQueryProxy:
     data: str | None = None
     chat_id: int | None = None
     message_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ButtonProxy:
+    """Описывает inline-кнопку независимо от Telegram-библиотеки.
+
+    Attributes:
+        text: Надпись на кнопке.
+        callback_data: Данные, передаваемые при нажатии кнопки.
+    """
+
+    text: str
+    callback_data: str
+
+
+@dataclass(frozen=True, slots=True)
+class ResponseProxy:
+    """Хранит подготовленный ответ пользователю.
+
+    Создаётся через ResponseBuilder. Кнопки организованы в строки.
+    Каждый ответ получает отдельный буфер изображения. Последующая
+    настройка Builder не изменяет уже собранные ответы.
+
+    Attributes:
+        text: Текст ответа, если задан.
+        buttons: Строки inline-кнопок; пустой кортеж означает отсутствие.
+        image: Буфер изображения, если задано; содержимое изменяемо.
+    """
+
+    text: str | None = None
+    buttons: tuple[tuple[ButtonProxy, ...], ...] = ()
+    image: BytesIO | None = None
