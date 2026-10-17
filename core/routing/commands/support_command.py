@@ -1,6 +1,6 @@
-from ..proxy import MessageProxy, ResponseBuilder, ResponseProxy
+from ...proxy import MessageProxy, ResponseBuilder, ResponseProxy
 from .command import Command
-from .texts import SUPPORT_TEXT
+from ..texts import SUPPORT_TEXT
 
 class SupportCommand(Command):
     """Базовый обработчик команды /support."""

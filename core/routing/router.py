@@ -1,7 +1,5 @@
 from ..proxy import CallbackQueryProxy, MessageProxy, ResponseProxy
-from .roadmap_command import RoadmapCommand
-from .start_command import StartCommand
-from .support_command import SupportCommand
+from .commands import RoadmapCommand, StartCommand, SupportCommand
 
 
 class MessageRouter:

@@ -1,7 +1,7 @@
-from ..proxy import MessageProxy, ResponseBuilder, ResponseProxy
+from ...proxy import MessageProxy, ResponseBuilder, ResponseProxy
 from .command import Command
-from ..utils.DatabaseConnection import DatabaseConnection
-from .texts import START_TEXT
+from ...utils.DatabaseConnection import DatabaseConnection
+from ..texts import START_TEXT
 
 
 class StartCommand(Command):

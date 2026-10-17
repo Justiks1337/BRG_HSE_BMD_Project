@@ -1,4 +1,4 @@
-from ..proxy import ButtonProxy, MessageProxy, ResponseBuilder, ResponseProxy
+from ...proxy import ButtonProxy, MessageProxy, ResponseBuilder, ResponseProxy
 from .command import Command
 
 

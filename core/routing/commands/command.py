@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from ..proxy import MessageProxy, ResponseProxy
+from ...proxy import MessageProxy, ResponseProxy
 
 
 class Command(ABC):

@@ -33,9 +33,10 @@ class DatabaseConnection(Singleton):
         return connection
 
     async def create_tables(self) -> None:
-        """
-        Создание таблиц нужных для работы бота
-        :return: None
+        """Создаёт таблицы пользователей, бинго и прогресса по линиям D1–D5.
+
+        Таблицы d1–d5 хранят целочисленные user_id и step.
+        Внешний ключ связывает каждую запись с users(user_id).
         """
         async with self.connection.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -45,7 +46,7 @@ class DatabaseConnection(Singleton):
             pass
 
         async with self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
+            CREATE TABLE IF NOT EXISTS bingo (
                 user_id INTEGER NOT NULL ,
                 task_number INTEGER NOT NULL, 
                 FOREIGN KEY (user_id) 
@@ -53,6 +54,17 @@ class DatabaseConnection(Singleton):
             )
         """):
             pass
+
+        # Все линии используют одну схему; имена таблиц заданы в приложении.
+        for table_name in ("d1", "d2", "d3", "d4", "d5"):
+            async with self.connection.execute(f"""
+                CREATE TABLE IF NOT EXISTS {table_name} (
+                    user_id INTEGER NOT NULL,
+                    step INTEGER NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """):
+                pass
 
         await self.connection.commit()
 
