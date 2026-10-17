@@ -14,12 +14,14 @@ class MessageProxy:
         chat_id: Идентификатор чата, в котором получено сообщение.
         user_id: Идентификатор отправителя, если он указан.
         text: Текст сообщения; None для сообщений без текста.
+        is_private: Признак личного чата; по умолчанию False.
     """
 
     message_id: int
     chat_id: int
     user_id: int | None = None
     text: str | None = None
+    is_private: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +38,7 @@ class CallbackQueryProxy:
         data: Данные кнопки, если они переданы.
         chat_id: Идентификатор чата исходного сообщения, если доступен.
         message_id: Идентификатор исходного сообщения, если доступен.
+        is_private: True, если подтверждён личный чат исходного сообщения.
     """
 
     query_id: str
@@ -43,19 +46,26 @@ class CallbackQueryProxy:
     data: str | None = None
     chat_id: int | None = None
     message_id: int | None = None
+    is_private: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class ButtonProxy:
     """Описывает inline-кнопку независимо от Telegram-библиотеки.
 
+    callback_data хранит идентификатор действия внутри core. Если
+    disabled=True, Telegram-слой создаёт неактивную кнопку и не
+    передаёт этот идентификатор клиенту как callback_data.
+
     Attributes:
         text: Надпись на кнопке.
         callback_data: Данные, передаваемые при нажатии кнопки.
+        disabled: Признак неактивной кнопки.
     """
 
     text: str
     callback_data: str
+    disabled: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,7 +4,7 @@ import os
 import aiosqlite
 from dotenv import load_dotenv
 
-from singleton import Singleton
+from .singleton import Singleton
 
 
 load_dotenv()
@@ -65,28 +65,22 @@ class DatabaseConnection(Singleton):
         :return: None
         """
         async with self.connection.execute("""
-            INSERT INTO users VALUES (?)
+            INSERT INTO users 
+            VALUES (?)
+            ON CONFLICT(user_id) DO NOTHING
         """, (user_id, )
         ):
             pass
 
         await self.connection.commit()
 
-    async def user_exists(self, user_id: int) -> bool:
-        """
-        Узнать наличие пользователя в базе данных по user_id
-        :param user_id: int, ID пользователя
-        :return: True, если пользователь существует, ианче False
-        """
-        async with self.connection.execute("""
-            SELECT COUNT(*) FROM users WHERE user_id = ?
-        """, (user_id, )) as cursor:
-            result = (await cursor.fetchone())[0]
-
-            return result == 1
-
     async def get_connection(self):
+        """Открывает соединение с проверкой внешних ключей и создаёт таблицы."""
         self.connect = await aiosqlite.connect(os.environ["DATABASE_NAME"])
+        # SQLite требует включать внешние ключи для каждого соединения
+        # до начала транзакций, иначе PRAGMA не изменит настройку.
+        async with self.connection.execute("PRAGMA foreign_keys = ON"):
+            pass
         await self.create_tables()
 
 
