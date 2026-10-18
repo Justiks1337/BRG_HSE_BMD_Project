@@ -122,6 +122,8 @@ class BingoImageBuilder:
         после загрузки AssetsManager и до начала polling. Во время обработки
         сообщений кеш только читается: блокировки и вытеснение не нужны.
         Тексты, фон и шрифт считаются постоянными до перезапуска приложения.
+        Сначала используется системный DejaVuSans.ttf. Если он недоступен,
+        резервный шрифт берётся из resources/fonts через AssetsManager.
         Шрифт и временный фон освобождаются после подготовки изображений.
 
         Raises:
@@ -139,7 +141,13 @@ class BingoImageBuilder:
 
         with Image.open(BytesIO(cls.check_image.getvalue())) as source:
             background = source.convert("RGBA")
-        font = ImageFont.truetype("DejaVuSans.ttf", 32)
+        try:
+            font = ImageFont.truetype("DejaVuSans.ttf", 32)
+        except OSError:
+            # Резервная копия уже загружена в память при запуске бота.
+            font = ImageFont.truetype(
+                AssetsManager().get_assets("fonts/DejaVuSans.ttf"), 32,
+            )
         tiles = []
         for center, text in zip(cls.ceil_coords, BINGO_TASKS, strict=True):
             # Запас по два пикселя сохраняет сглаживание у краёв ячейки.
