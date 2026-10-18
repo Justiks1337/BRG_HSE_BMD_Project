@@ -31,7 +31,7 @@ class RoadmapCommand(Command):
             Ответ для отправки пользователю через Telegram-хендлер.
         """
         # Выбор ветки использует префикс roadmap:. Кнопки загрузки
-        # фотографии используют префикс upload: (например, upload:d5).
+        # фотографии используют префикс upload: (например, upload:d5:1).
         return (
             ResponseBuilder()
             .with_text(ROADMAP_TEXT)

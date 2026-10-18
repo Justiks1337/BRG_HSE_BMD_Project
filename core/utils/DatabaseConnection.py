@@ -49,7 +49,9 @@ class DatabaseConnection(Singleton):
 
         Таблицы d1–d5 хранят целочисленные user_id и step.
         Внешний ключ связывает каждую запись с users(user_id).
-        bingo_uploads хранит одно ожидающее загрузки задание на пользователя.
+        photo_uploads хранит одно ожидание фотографии для бинго или маршрута.
+        Старое ожидание из bingo_uploads переносится при первом запуске,
+        после чего прежняя таблица удаляется в той же транзакции.
         """
         async with self.connection.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -69,13 +71,29 @@ class DatabaseConnection(Singleton):
             pass
 
         async with self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS bingo_uploads (
+            CREATE TABLE IF NOT EXISTS photo_uploads (
                 user_id INTEGER PRIMARY KEY,
-                task_number INTEGER NOT NULL CHECK(task_number BETWEEN 1 AND 12),
+                target TEXT NOT NULL CHECK(target IN ('bingo', 'd1', 'd2', 'd3', 'd4', 'd5')),
+                item_number INTEGER NOT NULL CHECK(item_number > 0),
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """):
             pass
+
+        # Сохраняем ранее выбранные задания бинго при обновлении схемы.
+        async with self.connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'bingo_uploads'"
+        ) as cursor:
+            legacy_uploads = await cursor.fetchone()
+        if legacy_uploads is not None:
+            async with self.connection.execute("""
+                INSERT INTO photo_uploads (user_id, target, item_number)
+                SELECT user_id, 'bingo', task_number FROM bingo_uploads WHERE 1
+                ON CONFLICT(user_id) DO NOTHING
+            """):
+                pass
+            async with self.connection.execute("DROP TABLE bingo_uploads"):
+                pass
 
         # Все линии используют одну схему; имена таблиц заданы в приложении.
         for table_name in ("d1", "d2", "d3", "d4", "d5"):
@@ -138,8 +156,9 @@ class DatabaseConnection(Singleton):
         """Сохраняет задание, которое выполнит следующая фотография.
 
         Пользователь создаётся при необходимости для соблюдения внешнего
-        ключа. Новый выбор заменяет прежний. Уже выполненное задание
-        не становится ожидающим даже при нажатии старой кнопки загрузки.
+        ключа. Новый выбор заменяет ожидание из бинго или маршрута.
+        Выполненное задание не становится ожидающим даже при нажатии
+        старой кнопки загрузки.
 
         Args:
             user_id: Идентификатор пользователя в личном чате.
@@ -156,13 +175,14 @@ class DatabaseConnection(Singleton):
             raise ValueError("Неизвестное задание бинго")
         await self.add_user(user_id)
         async with self.connection.execute("""
-            INSERT INTO bingo_uploads (user_id, task_number)
-            SELECT ?, ?
+            INSERT INTO photo_uploads (user_id, target, item_number)
+            SELECT ?, 'bingo', ?
             WHERE NOT EXISTS (
                 SELECT 1 FROM bingo WHERE user_id = ? AND task_number = ?
             )
-            ON CONFLICT(user_id) DO UPDATE SET task_number = excluded.task_number
-            RETURNING task_number
+            ON CONFLICT(user_id) DO UPDATE SET
+                target = excluded.target, item_number = excluded.item_number
+            RETURNING item_number
         """, (user_id, task_number, user_id, task_number)) as cursor:
             row = await cursor.fetchone()
         await self.connection.commit()
@@ -188,11 +208,11 @@ class DatabaseConnection(Singleton):
         """
         async with self.connection.execute("""
             INSERT INTO bingo (user_id, task_number)
-            SELECT user_id, task_number FROM bingo_uploads
-            WHERE user_id = ? AND NOT EXISTS (
+            SELECT user_id, item_number FROM photo_uploads
+            WHERE user_id = ? AND target = 'bingo' AND NOT EXISTS (
                 SELECT 1 FROM bingo
-                WHERE bingo.user_id = bingo_uploads.user_id
-                    AND bingo.task_number = bingo_uploads.task_number
+                WHERE bingo.user_id = photo_uploads.user_id
+                    AND bingo.task_number = photo_uploads.item_number
             )
             RETURNING task_number
         """, (user_id,)) as cursor:
@@ -200,12 +220,101 @@ class DatabaseConnection(Singleton):
         if row is not None:
             # Не стираем другое задание, выбранное во время обработки фото.
             async with self.connection.execute(
-                "DELETE FROM bingo_uploads WHERE user_id = ? AND task_number = ?",
+                "DELETE FROM photo_uploads "
+                "WHERE user_id = ? AND target = 'bingo' AND item_number = ?",
                 (user_id, row[0]),
             ):
                 pass
         await self.connection.commit()
         return row[0] if row is not None else None
+
+    async def request_diameter_upload(
+        self, user_id: int, diameter: str, step: int, final_step: int,
+    ) -> bool:
+        """Ожидает фото для текущей незавершённой точки маршрута.
+
+        Новое ожидание заменяет прежнее, включая бинго. Номер из кнопки
+        должен совпадать с прогрессом в БД; финал не требует фотографии.
+
+        Args:
+            user_id: Идентификатор пользователя из личного чата.
+            diameter: Имя таблицы d1–d5 из закрытого списка.
+            step: Номер точки, на которой нажата кнопка загрузки.
+            final_step: Номер финального поздравления в списке точек.
+
+        Returns:
+            True, если ожидание создано; False для старой или финальной точки.
+
+        Raises:
+            ValueError: Если диаметр неизвестен или номера шагов некорректны.
+            RuntimeError: Если соединение с БД не открыто.
+        """
+        if diameter not in ("d1", "d2", "d3", "d4", "d5"):
+            raise ValueError("Неизвестный диаметр")
+        if any(type(value) is not int or value < 1 for value in (step, final_step)):
+            raise ValueError("Шаг маршрута должен быть положительным целым числом")
+        await self.add_user(user_id)
+        # В SQL подставляется только проверенное имя таблицы; данные — через ?.
+        async with self.connection.execute(f"""
+            INSERT INTO photo_uploads (user_id, target, item_number)
+            SELECT ?, ?, ?
+            WHERE ? < ? AND ? = COALESCE((
+                SELECT step FROM {diameter} WHERE user_id = ?
+                ORDER BY rowid DESC LIMIT 1
+            ), 1)
+            ON CONFLICT(user_id) DO UPDATE SET
+                target = excluded.target, item_number = excluded.item_number
+            RETURNING item_number
+        """, (user_id, diameter, step, step, final_step, step, user_id)) as cursor:
+            row = await cursor.fetchone()
+        await self.connection.commit()
+        return row is not None
+
+    async def complete_diameter_upload(self, user_id: int) -> tuple[str, int] | None:
+        """Сохраняет следующий шаг для ожидающей фотографии маршрута.
+
+        История в таблицах d1–d5 сохраняется: новая строка становится текущей
+        по существующему правилу последнего rowid. Вставка разрешена только
+        при совпадении ожидающей точки с текущим шагом, поэтому повторные
+        и одновременно полученные фотографии не пропускают точки.
+
+        Args:
+            user_id: Идентификатор отправителя фотографии из личного чата.
+
+        Returns:
+            Диаметр и новый шаг либо None при отсутствии актуального ожидания.
+
+        Raises:
+            RuntimeError: Если соединение с БД не открыто.
+        """
+        async with self.connection.execute("""
+            SELECT target, item_number FROM photo_uploads
+            WHERE user_id = ? AND target IN ('d1', 'd2', 'd3', 'd4', 'd5')
+        """, (user_id,)) as cursor:
+            pending = await cursor.fetchone()
+        if pending is None:
+            return None
+        diameter, step = pending
+        # diameter выбран из закрытого списка в SELECT выше.
+        async with self.connection.execute(f"""
+            INSERT INTO {diameter} (user_id, step)
+            SELECT user_id, item_number + 1 FROM photo_uploads
+            WHERE user_id = ? AND target = ? AND item_number = ?
+                AND item_number = COALESCE((
+                    SELECT step FROM {diameter} WHERE user_id = ?
+                    ORDER BY rowid DESC LIMIT 1
+                ), 1)
+            RETURNING step
+        """, (user_id, diameter, step, user_id)) as cursor:
+            row = await cursor.fetchone()
+        # Удаляем только обработанное ожидание, сохраняя более новый выбор.
+        async with self.connection.execute(
+            "DELETE FROM photo_uploads WHERE user_id = ? AND target = ? AND item_number = ?",
+            (user_id, diameter, step),
+        ):
+            pass
+        await self.connection.commit()
+        return (diameter, row[0]) if row is not None else None
 
     async def get_diameter_step(self, diameter: str, user_id: int) -> int:
         """Возвращает сохранённый шаг пользователя на выбранном диаметре.

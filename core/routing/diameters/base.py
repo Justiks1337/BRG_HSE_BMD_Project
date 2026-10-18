@@ -48,12 +48,32 @@ class DiameterRoute:
 
         Returns:
             Текст и изображение точки. До финала ответ содержит кнопку
-            «Загрузить фотографию» с callback_data вида upload:d1–upload:d5.
+            «Загрузить фотографию» с callback_data вида upload:d5:1,
+            где последнее число обозначает показанный шаг.
             Финальное поздравление отправляется без кнопок.
         """
         step = await DatabaseConnection().get_diameter_step(
             self.diameter, callback.user_id
         )
+        return self.build_response(step)
+
+    def build_response(self, step: int) -> ResponseProxy:
+        """Собирает карточку точки по известному шагу без обращения к БД.
+
+        Используется при выборе маршрута и после сохранения фотографии.
+        Последний элемент points содержит поздравление без кнопок.
+
+        Args:
+            step: Положительный номер текущего шага, начиная с 1.
+
+        Returns:
+            Точка с кнопкой загрузки либо финальное поздравление.
+
+        Raises:
+            ValueError: Если шаг не является положительным целым числом.
+        """
+        if type(step) is not int or step < 1:
+            raise ValueError("Шаг маршрута должен быть положительным целым числом")
         index = min(step, len(self.points)) - 1
         point = self.points[index]
         builder = (
@@ -61,12 +81,11 @@ class DiameterRoute:
             .with_text(point.text)
             .with_image(BytesIO(point.image))
         )
-        # Просмотр точки не меняет step. Переход будет выполняться
-        # обработчиком загрузки фотографии, а не нажатием на диаметр.
+        # Просмотр точки не меняет step: переход сохраняется только после фото.
         if index < len(self.points) - 1:
-            # Схема prefix:diameter совместима с форматом CallbackData.
+            # Номер шага защищает от повторного использования старой кнопки.
             # В core формируется строка, без зависимости от aiogram.
             builder.add_button_row(
-                ButtonProxy("Загрузить фотографию", f"upload:{self.diameter}")
+                ButtonProxy("Загрузить фотографию", f"upload:{self.diameter}:{step}")
             )
         return builder.build()

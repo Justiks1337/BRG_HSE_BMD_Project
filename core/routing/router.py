@@ -8,15 +8,25 @@ from ..proxy import CallbackQueryProxy, MessageProxy, ResponseProxy
 from .bingo import BingoPhotoHandler, BingoRoute, BingoTaskRoute, BingoUploadRoute
 from .bingo.content import BINGO_TASKS
 from .commands import RoadmapCommand, StartCommand, SupportCommand
-from .diameters import D1Route, D2Route, D3Route, D4Route, D5Route
+from .diameters import (
+    DIAMETER_ROUTES,
+    D1Route, D2Route, D3Route, D4Route, D5Route,
+    DiameterPhotoHandler,
+    DiameterUploadRoute,
+)
 
 
 # Допускаем только канонические номера: без знака, пробелов и ведущих нулей.
 _BINGO_TASK_NUMBERS = frozenset(str(number) for number in range(1, len(BINGO_TASKS) + 1))
 
+_DIAMETER_STEP_NUMBERS = {
+    diameter: frozenset(str(step) for step in range(1, len(route.points)))
+    for diameter, route in DIAMETER_ROUTES.items()
+}
+
 
 class MessageRouter:
-    """Направляет фотографии в бинго, а текст — обработчикам команд.
+    """Направляет фотографии в маршруты или бинго, а текст — командам.
 
     Для выбора команды используется только её имя. Исходное сообщение
     вместе с аргументами передаётся в execute. Имена сравниваются целиком
@@ -30,8 +40,9 @@ class MessageRouter:
             message: Исходное сообщение, подготовленное Mapper.
 
         Returns:
-            Подтверждение загрузки или ответ команды. Возвращает None
-            для неизвестного ввода, фотографии без ожидающего задания
+            Следующая точка маршрута, подтверждение бинго или ответ команды.
+            Возвращает None
+            для неизвестного ввода, фотографии без ожидающей загрузки
             и любых сообщений вне личного чата.
         """
         # Команды доступны только в личном чате. Mapper определяет
@@ -39,9 +50,12 @@ class MessageRouter:
         if not message.is_private:
             return None
 
-        # Фотография связывается только с заранее выбранным заданием.
+        # Общее ожидание в БД связывает фото с одной точкой или заданием.
         # Проверяем её до текста: у фотографии текст сообщения отсутствует.
         if message.photo_file_id is not None:
+            response = await DiameterPhotoHandler().execute(message)
+            if response is not None:
+                return response
             return await BingoPhotoHandler().execute(message)
 
         if not isinstance(message.text, str):
@@ -72,8 +86,8 @@ class ButtonRouter:
     D1–D5 показывают сохранённый шаг пользователя, а бинго — таблицу
     заданий с отметками о выполнении. bingo:N открывает задание,
     upload:bingo:N ожидает фотографию для него; N принимает значения 1–12.
-    Значения upload:d1–upload:d5 зарезервированы для загрузки фотографии
-    и не используются для выбора точки маршрута.
+    upload:d5:1 ожидает фотографию для первой точки D5. Номер шага
+    проверяется по списку точек, а его актуальность — по прогрессу в БД.
     """
 
     async def route(self, callback: CallbackQueryProxy) -> ResponseProxy | None:
@@ -108,6 +122,11 @@ class ButtonRouter:
                 return await BingoTaskRoute().execute(callback, int(number))
             case ["upload", "bingo", number] if number in _BINGO_TASK_NUMBERS:
                 return await BingoUploadRoute().execute(callback, int(number))
+            case ["upload", diameter, step] if (
+                diameter in _DIAMETER_STEP_NUMBERS
+                and step in _DIAMETER_STEP_NUMBERS[diameter]
+            ):
+                return await DiameterUploadRoute().execute(callback, diameter, int(step))
             case _:
                 return None
 
