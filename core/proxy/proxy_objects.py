@@ -61,16 +61,22 @@ class ButtonProxy:
     callback_data хранит идентификатор действия внутри core. Если
     disabled=True, Telegram-слой создаёт неактивную кнопку и не
     передаёт этот идентификатор клиенту как callback_data.
+    Надписи inline-кнопок не поддерживают HTML-разметку и parse_mode
+    в Telegram API; HTML применяется к сообщениям, отправленным в ответ.
+    Для custom emoji перед надписью используется отдельный идентификатор.
 
     Attributes:
-        text: Надпись на кнопке.
+        text: Надпись на кнопке обычным текстом, без HTML-разметки.
         callback_data: Данные, передаваемые при нажатии кнопки.
         disabled: Признак неактивной кнопки.
+        icon_custom_emoji_id: Идентификатор custom emoji перед надписью.
+            None означает отсутствие иконки. Это обычная строка без aiogram.
     """
 
     text: str
     callback_data: str
     disabled: bool = False
+    icon_custom_emoji_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,8 +91,12 @@ class ResponseProxy:
         text: Текст ответа, если задан.
         buttons: Строки inline-кнопок; пустой кортеж означает отсутствие.
         image: Буфер изображения, если задано; содержимое изменяемо.
+        parse_mode: Режим текста или подписи: HTML по умолчанию,
+            MarkdownV2, Markdown либо None для отключения разметки.
+            Хранится обычной строкой, независимо от типов aiogram.
     """
 
     text: str | None = None
     buttons: tuple[tuple[ButtonProxy, ...], ...] = ()
     image: BytesIO | None = None
+    parse_mode: str | None = "HTML"

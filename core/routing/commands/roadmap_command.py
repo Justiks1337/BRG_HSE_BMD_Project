@@ -13,8 +13,9 @@ class RoadmapCommand(Command):
     """Готовит меню выбора ветки маршрута для команды /roadmap.
 
     Меню содержит D1–D5 и «Бинго», расположенные в две строки.
+    Перед названиями D1–D5 отображаются индивидуальные custom emoji.
     Кнопка D5 открывает текущую точку маршрута через ButtonRouter,
-    а «Бинго» — карточку заданий. Кнопки D1–D4 пока неактивны;
+    а «Бинго» — карточку заданий. Кнопки D1–D4 помечены как «скоро»;
     их обработчики сохранены для последующего включения.
     Отправку сообщения выполняет Telegram-слой.
     """
@@ -36,13 +37,28 @@ class RoadmapCommand(Command):
             ResponseBuilder()
             .with_text(ROADMAP_TEXT)
             .add_button_row(
-                ButtonProxy("D1", "roadmap:d1", disabled=True),
-                ButtonProxy("D2", "roadmap:d2", disabled=True),
-                ButtonProxy("D3", "roadmap:d3", disabled=True),
+                ButtonProxy(
+                    "D1 — скоро", "roadmap:d1", disabled=True,
+                    icon_custom_emoji_id="5380022798297105587",
+                ),
+                ButtonProxy(
+                    "D2 — скоро", "roadmap:d2", disabled=True,
+                    icon_custom_emoji_id="5379938110131965042",
+                ),
+                ButtonProxy(
+                    "D3 — скоро", "roadmap:d3", disabled=True,
+                    icon_custom_emoji_id="5379926792893140809",
+                ),
             )
             .add_button_row(
-                ButtonProxy("D4", "roadmap:d4", disabled=True),
-                ButtonProxy("D5", "roadmap:d5"),
+                ButtonProxy(
+                    "D4 — скоро", "roadmap:d4", disabled=True,
+                    icon_custom_emoji_id="5379619225990107477",
+                ),
+                ButtonProxy(
+                    "D5", "roadmap:d5",
+                    icon_custom_emoji_id="5379780338803313901",
+                ),
                 ButtonProxy("Бинго", "roadmap:bingo"),
             )
             .build()

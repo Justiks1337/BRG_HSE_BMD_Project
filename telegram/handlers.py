@@ -25,17 +25,23 @@ async def _send_response(message: Message, response: ResponseProxy) -> None:
         message: Сообщение aiogram, определяющее чат получателя.
         response: Текст, изображение и кнопки ответа. При наличии картинки
             текст становится подписью. Содержимое буфера читается целиком,
-            независимо от позиции его курсора.
+            независимо от позиции его курсора. parse_mode задаёт режим
+            именно этого ответа, включая None для отключения разметки.
     """
     keyboard = Mapper.map_buttons(response.buttons)
     if response.image is not None:
         await message.answer_photo(
             photo=BufferedInputFile(response.image.getvalue(), filename="image.png"),
             caption=response.text,
+            parse_mode=response.parse_mode,
             reply_markup=keyboard,
         )
     elif response.text is not None:
-        await message.answer(response.text, reply_markup=keyboard)
+        await message.answer(
+            response.text,
+            parse_mode=response.parse_mode,
+            reply_markup=keyboard,
+        )
 
 
 @router.message()

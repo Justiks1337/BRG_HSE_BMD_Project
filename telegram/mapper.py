@@ -79,7 +79,9 @@ class Mapper:
 
         Args:
             buttons: Строки кнопок из ResponseProxy. Для disabled-кнопки
-                сохраняется надпись, но callback_data не передаётся.
+                сохраняются надпись и иконка, но callback_data не передаётся.
+                Custom emoji передаётся через icon_custom_emoji_id: Telegram
+                не разбирает HTML-тег tg-emoji внутри надписи кнопки.
 
         Returns:
             Клавиатура aiogram либо None, если кнопок нет.
@@ -91,6 +93,7 @@ class Mapper:
                 [
                     InlineKeyboardButton(
                         text=button.text,
+                        icon_custom_emoji_id=button.icon_custom_emoji_id,
                         # callback_data и disabled задают разные типы кнопки.
                         # Telegram получает только один из этих вариантов.
                         callback_data=None if button.disabled else button.callback_data,
