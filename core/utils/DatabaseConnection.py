@@ -47,7 +47,8 @@ class DatabaseConnection(Singleton):
     async def create_tables(self) -> None:
         """Создаёт таблицы пользователей, бинго и прогресса по линиям D1–D5.
 
-        Таблицы d1–d5 хранят целочисленные user_id и step.
+        Таблицы d1–d5 хранят целочисленные user_id и step: 0 обозначает
+        вступление, 1 — первую точку. Существующие шаги не перенумеровываются.
         Внешний ключ связывает каждую запись с users(user_id).
         photo_uploads хранит одно ожидание фотографии для бинго или маршрута.
         Старое ожидание из bingo_uploads переносится при первом запуске,
@@ -104,6 +105,18 @@ class DatabaseConnection(Singleton):
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """):
+                pass
+
+            # Раньше первая точка была доступна без записи в таблице.
+            # Сохраняем начатый маршрут при наличии старого ожидания фото.
+            async with self.connection.execute(f"""
+                INSERT INTO {table_name} (user_id, step)
+                SELECT user_id, 1 FROM photo_uploads
+                WHERE target = ? AND item_number = 1 AND NOT EXISTS (
+                    SELECT 1 FROM {table_name}
+                    WHERE {table_name}.user_id = photo_uploads.user_id
+                )
+            """, (table_name,)):
                 pass
 
         await self.connection.commit()
@@ -228,13 +241,42 @@ class DatabaseConnection(Singleton):
         await self.connection.commit()
         return row[0] if row is not None else None
 
+    async def start_diameter(self, diameter: str, user_id: int) -> None:
+        """Переводит новый маршрут с нулевого шага на первую точку.
+
+        Если маршрут уже начат или завершён, ничего не меняет. Вставка
+        проверяет текущий шаг в том же SQL-запросе, поэтому повторные
+        и одновременные нажатия «Поехали» не дублируют запуск.
+
+        Args:
+            diameter: Имя таблицы d1–d5 из закрытого списка.
+            user_id: Идентификатор пользователя, начинающего маршрут.
+
+        Raises:
+            ValueError: Если диаметр неизвестен.
+            RuntimeError: Если соединение с БД не открыто.
+        """
+        if diameter not in ("d1", "d2", "d3", "d4", "d5"):
+            raise ValueError("Неизвестный диаметр")
+        await self.add_user(user_id)
+        async with self.connection.execute(f"""
+            INSERT INTO {diameter} (user_id, step)
+            SELECT ?, 1 WHERE COALESCE((
+                SELECT step FROM {diameter} WHERE user_id = ?
+                ORDER BY rowid DESC LIMIT 1
+            ), 0) = 0
+        """, (user_id, user_id)):
+            pass
+        await self.connection.commit()
+
     async def request_diameter_upload(
         self, user_id: int, diameter: str, step: int, final_step: int,
     ) -> bool:
         """Ожидает фото для текущей незавершённой точки маршрута.
 
         Новое ожидание заменяет прежнее, включая бинго. Номер из кнопки
-        должен совпадать с прогрессом в БД; финал не требует фотографии.
+        должен совпадать с прогрессом в БД; вступление и финал не требуют
+        фотографии. До нажатия «Поехали» загрузка первой точки недоступна.
 
         Args:
             user_id: Идентификатор пользователя из личного чата.
@@ -261,7 +303,7 @@ class DatabaseConnection(Singleton):
             WHERE ? < ? AND ? = COALESCE((
                 SELECT step FROM {diameter} WHERE user_id = ?
                 ORDER BY rowid DESC LIMIT 1
-            ), 1)
+            ), 0)
             ON CONFLICT(user_id) DO UPDATE SET
                 target = excluded.target, item_number = excluded.item_number
             RETURNING item_number
@@ -303,7 +345,7 @@ class DatabaseConnection(Singleton):
                 AND item_number = COALESCE((
                     SELECT step FROM {diameter} WHERE user_id = ?
                     ORDER BY rowid DESC LIMIT 1
-                ), 1)
+                ), 0)
             RETURNING step
         """, (user_id, diameter, step, user_id)) as cursor:
             row = await cursor.fetchone()
@@ -324,13 +366,13 @@ class DatabaseConnection(Singleton):
             user_id: Идентификатор пользователя, переданный параметром SQL.
 
         Returns:
-            Последний записанный шаг. Если прогресса ещё нет, возвращает 1
-            без изменения БД. При нескольких записях выбирает последнюю
-            по rowid, то есть по порядку добавления записей.
+            Последний записанный шаг. Если прогресса ещё нет, возвращает 0
+            для вступления без изменения БД. При нескольких записях выбирает
+            последнюю по rowid, то есть по порядку добавления записей.
 
         Raises:
             ValueError: Если диаметр неизвестен или сохранённый step
-                не является положительным целым числом.
+                не является неотрицательным целым числом.
             RuntimeError: Если соединение с БД не открыто.
         """
         # SQL-параметры нельзя использовать для имён таблиц. Поэтому
@@ -344,10 +386,10 @@ class DatabaseConnection(Singleton):
         ) as cursor:
             row = await cursor.fetchone()
         if row is None:
-            return 1
+            return 0
         step = row[0]
-        if not isinstance(step, int) or step < 1:
-            raise ValueError("Шаг маршрута должен быть положительным целым числом")
+        if not isinstance(step, int) or step < 0:
+            raise ValueError("Шаг маршрута должен быть неотрицательным целым числом")
         return step
 
     async def get_connection(self):

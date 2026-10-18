@@ -83,7 +83,8 @@ class MessageRouter:
 class ButtonRouter:
     """Выбирает маршрут, задание бинго или запрос загрузки фотографии.
 
-    D1–D5 показывают сохранённый шаг пользователя, а бинго — таблицу
+    D1–D5 показывают сохранённый шаг пользователя; route:start:d5
+    запускает D5 из нулевой точки без сброса прогресса. Бинго — таблица
     заданий с отметками о выполнении. bingo:N открывает задание,
     upload:bingo:N ожидает фотографию для него; N принимает значения 1–12.
     upload:d5:1 ожидает фотографию для первой точки D5. Номер шага
@@ -118,6 +119,8 @@ class ButtonRouter:
                 route = D5Route()
             case ["roadmap", "bingo"]:
                 route = BingoRoute()
+            case ["route", "start", diameter] if diameter in DIAMETER_ROUTES:
+                return await DIAMETER_ROUTES[diameter]().start(callback)
             case ["bingo", number] if number in _BINGO_TASK_NUMBERS:
                 return await BingoTaskRoute().execute(callback, int(number))
             case ["upload", "bingo", number] if number in _BINGO_TASK_NUMBERS:
