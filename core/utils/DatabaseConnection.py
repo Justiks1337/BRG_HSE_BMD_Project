@@ -52,7 +52,8 @@ class DatabaseConnection(Singleton):
         Внешний ключ связывает каждую запись с users(user_id).
         photo_uploads хранит одно ожидание фотографии для бинго или маршрута.
         Старое ожидание из bingo_uploads переносится при первом запуске,
-        после чего прежняя таблица удаляется в той же транзакции.
+        после чего прежняя таблица удаляется. Каждый SQL-запрос
+        выполняется с автоматической фиксацией изменений.
         """
         async with self.connection.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -119,8 +120,6 @@ class DatabaseConnection(Singleton):
             """, (table_name,)):
                 pass
 
-        await self.connection.commit()
-
     async def add_user(self, user_id: int) -> None:
         """
         Создать нового пользователя в базе данных.
@@ -136,8 +135,6 @@ class DatabaseConnection(Singleton):
         """, (user_id, )
         ):
             pass
-
-        await self.connection.commit()
 
     async def get_completed_bingo_tasks(self, user_id: int) -> set[int]:
         """Возвращает номера выполненных заданий бинго пользователя.
@@ -198,7 +195,6 @@ class DatabaseConnection(Singleton):
             RETURNING item_number
         """, (user_id, task_number, user_id, task_number)) as cursor:
             row = await cursor.fetchone()
-        await self.connection.commit()
         return row is not None
 
     async def complete_bingo_upload(self, user_id: int) -> int | None:
@@ -238,7 +234,6 @@ class DatabaseConnection(Singleton):
                 (user_id, row[0]),
             ):
                 pass
-        await self.connection.commit()
         return row[0] if row is not None else None
 
     async def start_diameter(self, diameter: str, user_id: int) -> None:
@@ -267,7 +262,6 @@ class DatabaseConnection(Singleton):
             ), 0) = 0
         """, (user_id, user_id)):
             pass
-        await self.connection.commit()
 
     async def request_diameter_upload(
         self, user_id: int, diameter: str, step: int, final_step: int,
@@ -309,7 +303,6 @@ class DatabaseConnection(Singleton):
             RETURNING item_number
         """, (user_id, diameter, step, step, final_step, step, user_id)) as cursor:
             row = await cursor.fetchone()
-        await self.connection.commit()
         return row is not None
 
     async def complete_diameter_upload(self, user_id: int) -> tuple[str, int] | None:
@@ -355,7 +348,6 @@ class DatabaseConnection(Singleton):
             (user_id, diameter, step),
         ):
             pass
-        await self.connection.commit()
         return (diameter, row[0]) if row is not None else None
 
     async def get_diameter_step(self, diameter: str, user_id: int) -> int:
@@ -393,8 +385,15 @@ class DatabaseConnection(Singleton):
         return step
 
     async def get_connection(self):
-        """Открывает соединение с проверкой внешних ключей и создаёт таблицы."""
-        self.connect = await aiosqlite.connect(os.environ["DATABASE_NAME"])
+        """Открывает соединение с autocommit и проверкой внешних ключей.
+
+        SQLite фиксирует изменения после завершения каждого SQL-запроса.
+        Несколько запросов одного метода не объединяются в транзакцию.
+        Внешние ключи включаются до создания и миграции таблиц.
+        """
+        self.connect = await aiosqlite.connect(
+            os.environ["DATABASE_NAME"], autocommit=True,
+        )
         # SQLite требует включать внешние ключи для каждого соединения
         # до начала транзакций, иначе PRAGMA не изменит настройку.
         async with self.connection.execute("PRAGMA foreign_keys = ON"):
