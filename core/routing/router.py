@@ -5,13 +5,18 @@ Telegram-события поступают в роутеры как Proxy. Ре�
 """
 
 from ..proxy import CallbackQueryProxy, MessageProxy, ResponseProxy
-from .bingo import BingoRoute
+from .bingo import BingoPhotoHandler, BingoRoute, BingoTaskRoute, BingoUploadRoute
+from .bingo.content import BINGO_TASKS
 from .commands import RoadmapCommand, StartCommand, SupportCommand
 from .diameters import D1Route, D2Route, D3Route, D4Route, D5Route
 
 
+# Допускаем только канонические номера: без знака, пробелов и ведущих нулей.
+_BINGO_TASK_NUMBERS = frozenset(str(number) for number in range(1, len(BINGO_TASKS) + 1))
+
+
 class MessageRouter:
-    """Выбирает команду по первому слову сообщения.
+    """Направляет фотографии в бинго, а текст — обработчикам команд.
 
     Для выбора команды используется только её имя. Исходное сообщение
     вместе с аргументами передаётся в execute. Имена сравниваются целиком
@@ -19,20 +24,25 @@ class MessageRouter:
     """
 
     async def route(self, message: MessageProxy) -> ResponseProxy | None:
-        """Отделяет команду от аргументов и вызывает её execute.
+        """Обрабатывает загрузку фотографии либо выбирает команду по имени.
 
         Args:
             message: Исходное сообщение, подготовленное Mapper.
 
         Returns:
-            Ответ выбранной команды либо None для пустого ввода,
-            сообщений без текста, неизвестных команд и любых
-            сообщений вне личного чата.
+            Подтверждение загрузки или ответ команды. Возвращает None
+            для неизвестного ввода, фотографии без ожидающего задания
+            и любых сообщений вне личного чата.
         """
         # Команды доступны только в личном чате. Mapper определяет
         # этот признак по типу чата; core не зависит от aiogram.
         if not message.is_private:
             return None
+
+        # Фотография связывается только с заранее выбранным заданием.
+        # Проверяем её до текста: у фотографии текст сообщения отсутствует.
+        if message.photo_file_id is not None:
+            return await BingoPhotoHandler().execute(message)
 
         if not isinstance(message.text, str):
             return None
@@ -57,41 +67,47 @@ class MessageRouter:
 
 
 class ButtonRouter:
-    """Передаёт выбор маршрута или бинго соответствующему обработчику.
+    """Выбирает маршрут, задание бинго или запрос загрузки фотографии.
 
     D1–D5 показывают сохранённый шаг пользователя, а бинго — таблицу
-    заданий с отметками о выполнении.
+    заданий с отметками о выполнении. bingo:N открывает задание,
+    upload:bingo:N ожидает фотографию для него; N принимает значения 1–12.
     Значения upload:d1–upload:d5 зарезервированы для загрузки фотографии
     и не используются для выбора точки маршрута.
     """
 
     async def route(self, callback: CallbackQueryProxy) -> ResponseProxy | None:
-        """Выбирает обработчик маршрута или бинго по полному callback_data.
+        """Разбирает callback_data и передаёт проверенный номер обработчику.
 
         Args:
             callback: Данные нажатия кнопки, подготовленные Mapper.
 
         Returns:
-            Текущая точка маршрута или карточка бинго. Для неизвестных
-            кнопок и любых callback вне личного чата возвращается None.
+            Карточка маршрута, бинго, задания либо просьба загрузить фото.
+            Для неизвестных или некорректных callback_data и нажатий
+            вне личного чата возвращается None.
         """
         # Признак личного чата вычисляется Mapper; core не зависит от aiogram.
-        if not callback.is_private:
+        if not callback.is_private or not isinstance(callback.data, str):
             return None
 
-        match callback.data:
-            case "roadmap:d1":
+        match callback.data.split(":"):
+            case ["roadmap", "d1"]:
                 route = D1Route()
-            case "roadmap:d2":
+            case ["roadmap", "d2"]:
                 route = D2Route()
-            case "roadmap:d3":
+            case ["roadmap", "d3"]:
                 route = D3Route()
-            case "roadmap:d4":
+            case ["roadmap", "d4"]:
                 route = D4Route()
-            case "roadmap:d5":
+            case ["roadmap", "d5"]:
                 route = D5Route()
-            case "roadmap:bingo":
+            case ["roadmap", "bingo"]:
                 route = BingoRoute()
+            case ["bingo", number] if number in _BINGO_TASK_NUMBERS:
+                return await BingoTaskRoute().execute(callback, int(number))
+            case ["upload", "bingo", number] if number in _BINGO_TASK_NUMBERS:
+                return await BingoUploadRoute().execute(callback, int(number))
             case _:
                 return None
 

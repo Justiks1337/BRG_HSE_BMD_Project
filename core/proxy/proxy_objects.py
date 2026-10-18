@@ -1,3 +1,5 @@
+"""Независимые от aiogram данные входящих событий и ответов пользователю."""
+
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -15,6 +17,8 @@ class MessageProxy:
         user_id: Идентификатор отправителя, если он указан.
         text: Текст сообщения; None для сообщений без текста.
         is_private: Признак личного чата; по умолчанию False.
+        photo_file_id: Идентификатор полученной фотографии либо None.
+            Содержит строку, а не объект aiogram; сам файл не скачивается.
     """
 
     message_id: int
@@ -22,6 +26,7 @@ class MessageProxy:
     user_id: int | None = None
     text: str | None = None
     is_private: bool = False
+    photo_file_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

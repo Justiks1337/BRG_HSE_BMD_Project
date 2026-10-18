@@ -1,3 +1,5 @@
+"""Преобразование данных между aiogram и независимыми объектами core."""
+
 from aiogram.enums import ChatType
 from aiogram.types import (
     CallbackQuery,
@@ -32,7 +34,8 @@ class Mapper:
         Returns:
             Данные для core. Отсутствующие отправитель и текст
             представлены значением None. is_private определяется
-            по типу чата Telegram.
+            по типу чата Telegram. Для фотографии передаётся file_id
+            самого большого доступного размера без скачивания файла.
         """
         return MessageProxy(
             message_id=message.message_id,
@@ -40,6 +43,7 @@ class Mapper:
             user_id=message.from_user.id if message.from_user is not None else None,
             text=message.text,
             is_private=message.chat.type == ChatType.PRIVATE,
+            photo_file_id=message.photo[-1].file_id if message.photo else None,
         )
 
     @staticmethod

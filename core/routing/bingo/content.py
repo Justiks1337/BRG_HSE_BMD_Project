@@ -11,6 +11,8 @@ from ..diameters.placeholders import IMAGE_PLACEHOLDER
 
 BINGO_TEXT = "Бинго по электричкам.\n\nЗдесь будет описание заданий и правил."
 BINGO_IMAGE = IMAGE_PLACEHOLDER
+# Общая заглушка для карточек отдельных заданий; не изображение поля бинго.
+BINGO_TASK_IMAGE = IMAGE_PLACEHOLDER
 BINGO_TASKS = (
     "Задание 1: текст-заглушка.",
     "Задание 2: текст-заглушка.",
