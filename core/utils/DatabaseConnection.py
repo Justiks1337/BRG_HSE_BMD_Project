@@ -1,3 +1,9 @@
+"""Асинхронный доступ к пользователям и прогрессу туристических маршрутов.
+
+Все SQL-запросы приложения сосредоточены в DatabaseConnection; обработчики
+маршрутов получают через него готовые значения шагов.
+"""
+
 from typing import Optional
 import os
 
@@ -23,10 +29,16 @@ class DatabaseConnection(Singleton):
     """
 
     def init(self):
+        """Готовит состояние Singleton до открытия соединения с БД."""
         self.connect: Optional[aiosqlite.Connection] = None
 
     @property
     def connection(self) -> aiosqlite.Connection:
+        """Возвращает открытое соединение.
+
+        Raises:
+            RuntimeError: Если соединение ещё не открыто или уже закрыто.
+        """
         connection = self.connect
         if connection is None:
             raise RuntimeError("Соединение с БД не открыто или уже закрыто")
@@ -85,6 +97,40 @@ class DatabaseConnection(Singleton):
             pass
 
         await self.connection.commit()
+
+    async def get_diameter_step(self, diameter: str, user_id: int) -> int:
+        """Возвращает сохранённый шаг пользователя на выбранном диаметре.
+
+        Args:
+            diameter: Имя таблицы из фиксированного списка d1–d5.
+            user_id: Идентификатор пользователя, переданный параметром SQL.
+
+        Returns:
+            Последний записанный шаг. Если прогресса ещё нет, возвращает 1
+            без изменения БД. При нескольких записях выбирает последнюю
+            по rowid, то есть по порядку добавления записей.
+
+        Raises:
+            ValueError: Если диаметр неизвестен или сохранённый step
+                не является положительным целым числом.
+            RuntimeError: Если соединение с БД не открыто.
+        """
+        # SQL-параметры нельзя использовать для имён таблиц. Поэтому
+        # интерполируем только имя из закрытого списка, а user_id — через ?.
+        if diameter not in ("d1", "d2", "d3", "d4", "d5"):
+            raise ValueError("Неизвестный диаметр")
+        async with self.connection.execute(
+            f"SELECT step FROM {diameter} WHERE user_id = ? "
+            "ORDER BY rowid DESC LIMIT 1",
+            (user_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if row is None:
+            return 1
+        step = row[0]
+        if not isinstance(step, int) or step < 1:
+            raise ValueError("Шаг маршрута должен быть положительным целым числом")
+        return step
 
     async def get_connection(self):
         """Открывает соединение с проверкой внешних ключей и создаёт таблицы."""

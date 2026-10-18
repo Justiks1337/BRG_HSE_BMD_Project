@@ -1,5 +1,12 @@
+"""Выбирает обработчики команд и нажатий кнопок в личном чате.
+
+Telegram-события поступают в роутеры как Proxy. Результат работы команд
+и маршрутов возвращается в Telegram-слой в виде ResponseProxy.
+"""
+
 from ..proxy import CallbackQueryProxy, MessageProxy, ResponseProxy
 from .commands import RoadmapCommand, StartCommand, SupportCommand
+from .diameters import D1Route, D2Route, D3Route, D4Route, D5Route
 
 
 class MessageRouter:
@@ -49,43 +56,39 @@ class MessageRouter:
 
 
 class ButtonRouter:
-    """Распознаёт кнопки выбора ветки маршрута.
+    """Передаёт выбор диаметра обработчику его текущей точки.
 
-    Все шесть маршрутов пока отключены. Даже при получении callback
-    из старого сообщения или вручную сформированного запроса
-    действия по маршруту не выполняются.
+    D1–D5 показывают сохранённый шаг пользователя. Бинго пока отключено.
+    Значения upload:d1–upload:d5 зарезервированы для загрузки фотографии
+    и не используются для выбора точки маршрута.
     """
 
     async def route(self, callback: CallbackQueryProxy) -> ResponseProxy | None:
-        """Распознаёт идентификатор кнопки без запуска маршрута.
+        """Выбирает обработчик диаметра по полному callback_data.
 
         Args:
-            callback: Данные нажатия, подготовленные Mapper. Поле data
-                рассматривается как пользовательский ввод.
+            callback: Данные нажатия кнопки, подготовленные Mapper.
 
         Returns:
-            Пока None для всех кнопок: маршруты отключены. Неизвестные
-            идентификаторы также игнорируются. Подтверждение callback
-            выполняет Telegram-хендлер. Callback вне личного чата
-            игнорируются до выбора обработчика.
+            Ответ с текущей точкой либо None для неизвестных кнопок,
+            Бинго и любых callback вне личного чата.
         """
-        # Обрабатываем кнопки только из личного чата. Если исходного
-        # сообщения нет, Mapper выставляет is_private=False.
+        # Признак личного чата вычисляется Mapper; core не зависит от aiogram.
         if not callback.is_private:
             return None
 
-        # Проверяем полное значение; префикс roadmap: сам по себе
-        # не даёт права на запуск какого-либо действия.
         match callback.data:
-            case (
-                "roadmap:d1"
-                | "roadmap:d2"
-                | "roadmap:d3"
-                | "roadmap:d4"
-                | "roadmap:d5"
-                | "roadmap:bingo"
-            ):
-                # Здесь будут обработчики после включения маршрутов.
-                return None
+            case "roadmap:d1":
+                route = D1Route()
+            case "roadmap:d2":
+                route = D2Route()
+            case "roadmap:d3":
+                route = D3Route()
+            case "roadmap:d4":
+                route = D4Route()
+            case "roadmap:d5":
+                route = D5Route()
             case _:
                 return None
+
+        return await route.execute(callback)
