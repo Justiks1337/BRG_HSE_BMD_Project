@@ -98,6 +98,32 @@ class DatabaseConnection(Singleton):
 
         await self.connection.commit()
 
+    async def get_completed_bingo_tasks(self, user_id: int) -> set[int]:
+        """Возвращает номера выполненных заданий бинго пользователя.
+
+        Задание считается выполненным при наличии записи в таблице bingo.
+        Повторные записи объединяются; возвращаются только номера 1–12.
+        Метод читает данные и не меняет прогресс пользователя.
+
+        Args:
+            user_id: Идентификатор пользователя для выборки его заданий.
+
+        Returns:
+            Набор номеров выполненных клеток, доступный для формирования
+            как клавиатуры, так и изображения. При отсутствии записей
+            возвращает пустой набор.
+
+        Raises:
+            RuntimeError: Если соединение с БД не открыто.
+        """
+        async with self.connection.execute(
+            "SELECT task_number FROM bingo "
+            "WHERE user_id = ? AND task_number BETWEEN 1 AND 12",
+            (user_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return {row[0] for row in rows}
+
     async def get_diameter_step(self, diameter: str, user_id: int) -> int:
         """Возвращает сохранённый шаг пользователя на выбранном диаметре.
 

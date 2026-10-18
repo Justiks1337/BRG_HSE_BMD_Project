@@ -1,7 +1,7 @@
-"""Формирует меню диаметров D1–D5 с активной кнопкой D5.
+"""Формирует меню диаметров D1–D5 с активными кнопками D5 и «Бинго».
 
 Текст меню берётся из ROADMAP_TEXT, а обработчики его кнопок выбираются
-в ButtonRouter по значениям roadmap:d1–roadmap:d5.
+в ButtonRouter по значениям roadmap:d1–roadmap:d5 и roadmap:bingo.
 """
 
 from ...proxy import ButtonProxy, MessageProxy, ResponseBuilder, ResponseProxy
@@ -13,14 +13,14 @@ class RoadmapCommand(Command):
     """Готовит меню выбора ветки маршрута для команды /roadmap.
 
     Меню содержит D1–D5 и «Бинго», расположенные в две строки.
-    Кнопка D5 открывает текущую точку маршрута через ButtonRouter.
-    Кнопки D1–D4 и «Бинго» пока неактивны. Обработчики D1–D4
-    сохранены для последующего включения.
+    Кнопка D5 открывает текущую точку маршрута через ButtonRouter,
+    а «Бинго» — карточку заданий. Кнопки D1–D4 пока неактивны;
+    их обработчики сохранены для последующего включения.
     Отправку сообщения выполняет Telegram-слой.
     """
 
     async def execute(self, message: MessageProxy) -> ResponseProxy:
-        """Собирает меню с активной D5; D1–D4 и «Бинго» отключены.
+        """Собирает меню с активными D5 и «Бинго»; D1–D4 отключены.
 
         Args:
             message: Исходное сообщение с данными пользователя и чата.
@@ -43,7 +43,7 @@ class RoadmapCommand(Command):
             .add_button_row(
                 ButtonProxy("D4", "roadmap:d4", disabled=True),
                 ButtonProxy("D5", "roadmap:d5"),
-                ButtonProxy("Бинго", "roadmap:bingo", disabled=True),
+                ButtonProxy("Бинго", "roadmap:bingo"),
             )
             .build()
         )

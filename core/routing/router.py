@@ -5,6 +5,7 @@ Telegram-события поступают в роутеры как Proxy. Ре�
 """
 
 from ..proxy import CallbackQueryProxy, MessageProxy, ResponseProxy
+from .bingo import BingoRoute
 from .commands import RoadmapCommand, StartCommand, SupportCommand
 from .diameters import D1Route, D2Route, D3Route, D4Route, D5Route
 
@@ -56,22 +57,23 @@ class MessageRouter:
 
 
 class ButtonRouter:
-    """Передаёт выбор диаметра обработчику его текущей точки.
+    """Передаёт выбор маршрута или бинго соответствующему обработчику.
 
-    D1–D5 показывают сохранённый шаг пользователя. Бинго пока отключено.
+    D1–D5 показывают сохранённый шаг пользователя, а бинго — таблицу
+    заданий с отметками о выполнении.
     Значения upload:d1–upload:d5 зарезервированы для загрузки фотографии
     и не используются для выбора точки маршрута.
     """
 
     async def route(self, callback: CallbackQueryProxy) -> ResponseProxy | None:
-        """Выбирает обработчик диаметра по полному callback_data.
+        """Выбирает обработчик маршрута или бинго по полному callback_data.
 
         Args:
             callback: Данные нажатия кнопки, подготовленные Mapper.
 
         Returns:
-            Ответ с текущей точкой либо None для неизвестных кнопок,
-            Бинго и любых callback вне личного чата.
+            Текущая точка маршрута или карточка бинго. Для неизвестных
+            кнопок и любых callback вне личного чата возвращается None.
         """
         # Признак личного чата вычисляется Mapper; core не зависит от aiogram.
         if not callback.is_private:
@@ -88,6 +90,8 @@ class ButtonRouter:
                 route = D4Route()
             case "roadmap:d5":
                 route = D5Route()
+            case "roadmap:bingo":
+                route = BingoRoute()
             case _:
                 return None
 
