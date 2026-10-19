@@ -50,7 +50,7 @@ class MessageRouter:
         if not message.is_private:
             return None
 
-        # Общее ожидание в БД связывает фото с одной точкой или заданием.
+        # Общее ожидание в памяти связывает фото с одной точкой или заданием.
         # Проверяем её до текста: у фотографии текст сообщения отсутствует.
         if message.photo_file_id is not None:
             response = await DiameterPhotoHandler().execute(message)
