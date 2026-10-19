@@ -3,6 +3,7 @@
 Выбор команды и проверку callback выполняют роутеры core через Proxy.
 Ответы команд и нажатий отправляются как сообщения с текстом, изображением
 и клавиатурой, а подтверждение callback снимает индикатор ожидания.
+Общий лимит команд, кнопок и фотографий проверяется до вызова core.
 """
 
 from aiogram import Router
@@ -10,10 +11,19 @@ from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from core.proxy import ResponseProxy
 from core.routing.router import ButtonRouter, MessageRouter
+from core.utils.rate_limiter import RateLimiter
 from .mapper import Mapper
+from .rate_limit_middleware import RateLimitMiddleware
 
 
 router = Router()
+# Один лимит на пользователя для команд, кнопок и загрузки фотографий.
+# Проверка срабатывает до фильтров и обработчиков обоих типов событий.
+rate_limit_middleware = RateLimitMiddleware(
+    RateLimiter(limit=10, window_seconds=10.0),
+)
+router.message.outer_middleware(rate_limit_middleware)
+router.callback_query.outer_middleware(rate_limit_middleware)
 message_router = MessageRouter()
 button_router = ButtonRouter()
 
