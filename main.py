@@ -15,7 +15,6 @@ from dotenv import load_dotenv
 from core.utils.AssetsManager import AssetsManager
 from core.utils.DatabaseConnection import DatabaseConnection
 from telegram import Bot
-from telegram.handlers import router
 
 
 def _prepare_bingo_images() -> None:
@@ -36,6 +35,8 @@ async def main() -> None:
     BOT_TOKEN и DATABASE_NAME задаются через окружение или .env.
     Ресурсы загружаются в память через asyncio.to_thread. Затем до начала
     polling подготавливаются все текстовые ячейки бинго и общая галочка.
+    Обработчики импортируются после загрузки ресурсов, поскольку задания
+    получают изображения из AssetsManager при импорте конфигурации.
     Соединение с БД открывается до приёма сообщений: команда /start
     использует его для регистрации пользователя. При завершении
     polling или ошибке соединение закрывается в finally.
@@ -53,6 +54,10 @@ async def main() -> None:
     await asyncio.to_thread(AssetsManager().load_assets)
     # Ждём полного прогрева: первый пользователь получает готовые ячейки.
     await asyncio.to_thread(_prepare_bingo_images)
+
+    # Конфигурация заданий может получать картинки из AssetsManager.
+    # Импорт обработчиков допустим только после загрузки ресурсов.
+    from telegram.handlers import router
 
     dispatcher = Dispatcher()
     dispatcher.include_router(router)

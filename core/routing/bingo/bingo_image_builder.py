@@ -2,7 +2,7 @@
 
 Изображения берутся из уже загруженного AssetsManager при импорте модуля.
 Перед началом polling метод prepare_images готовит общую галочку и
-двенадцать фрагментов с постоянными текстами из BINGO_TASKS. Подготовка
+двенадцать фрагментов с постоянными заголовками из BINGO_TASKS. Подготовка
 выполняется в рабочем потоке после загрузки ресурсов. Каждый build
 использует готовый кеш и возвращает независимый PNG-буфер.
 """
@@ -149,7 +149,7 @@ class BingoImageBuilder:
                 AssetsManager().get_assets("fonts/DejaVuSans.ttf"), 32,
             )
         tiles = []
-        for center, text in zip(cls.ceil_coords, BINGO_TASKS, strict=True):
+        for center, task in zip(cls.ceil_coords, BINGO_TASKS, strict=True):
             # Запас по два пикселя сохраняет сглаживание у краёв ячейки.
             left = floor(center[0] - cls._cell_size[0] / 2) - 2
             top = floor(center[1] - cls._cell_size[1] / 2) - 2
@@ -159,7 +159,8 @@ class BingoImageBuilder:
                 top + cls._cell_size[1] + 4,
             ))
             cls._draw_text(
-                ImageDraw.Draw(tile), (center[0] - left, center[1] - top), text, font,
+                ImageDraw.Draw(tile), (center[0] - left, center[1] - top),
+                task.title, font,
             )
             tiles.append((tile, (left, top)))
         cls._prepared_mark = mark
@@ -215,7 +216,7 @@ class BingoImageBuilder:
         Args:
             draw: Контекст рисования на фрагменте исходного фона.
             center: Центр ячейки относительно подготовленного фрагмента.
-            text: Постоянный текст задания для отрисовки белым цветом.
+            text: Постоянный заголовок задания для отрисовки белым цветом.
             base_font: Общий шрифт, используемый только во время подготовки.
 
         Raises:

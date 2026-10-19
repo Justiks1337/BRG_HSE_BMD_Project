@@ -6,7 +6,14 @@
 
 from .bingo_photo_handler import BingoPhotoHandler
 from .bingo_route import BingoRoute
+from .bingo_task import BingoTask
 from .bingo_task_route import BingoTaskRoute
 from .bingo_upload_route import BingoUploadRoute
 
-__all__ = ["BingoPhotoHandler", "BingoRoute", "BingoTaskRoute", "BingoUploadRoute"]
+__all__ = [
+    "BingoPhotoHandler",
+    "BingoRoute",
+    "BingoTask",
+    "BingoTaskRoute",
+    "BingoUploadRoute",
+]

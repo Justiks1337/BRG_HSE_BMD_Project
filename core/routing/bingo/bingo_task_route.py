@@ -4,11 +4,9 @@
 читается заново при каждом нажатии, включая нажатия старых кнопок.
 """
 
-from io import BytesIO
-
 from ...proxy import ButtonProxy, CallbackQueryProxy, ResponseBuilder, ResponseProxy
 from ...utils.DatabaseConnection import DatabaseConnection
-from .content import BINGO_TASK_IMAGE, BINGO_TASKS
+from .content import BINGO_TASKS
 
 
 class BingoTaskRoute:
@@ -39,13 +37,14 @@ class BingoTaskRoute:
             callback.user_id
         )
         completed = task_number in completed_tasks
-        text = BINGO_TASKS[task_number - 1]
+        task = BINGO_TASKS[task_number - 1]
+        text = task.description
         if completed:
             text += "\n\nВыполнено ✅"
         builder = (
             ResponseBuilder()
             .with_text(text)
-            .with_image(BytesIO(BINGO_TASK_IMAGE))
+            .with_image(task.image)
         )
         if not completed:
             builder.add_button_row(
