@@ -33,6 +33,8 @@ async def main() -> None:
     """Настраивает приложение и принимает обновления через long polling.
 
     BOT_TOKEN и DATABASE_NAME задаются через окружение или .env.
+    Необязательный SOCKS_PROXY_URL включает SOCKS-прокси для Telegram;
+    без значения соединение остаётся прямым.
     Ресурсы загружаются в память через asyncio.to_thread. Затем до начала
     polling подготавливаются все текстовые ячейки бинго и общая галочка.
     Обработчики импортируются после загрузки ресурсов, поскольку задания
@@ -48,6 +50,7 @@ async def main() -> None:
     token = os.getenv("BOT_TOKEN")
     if not token:
         raise RuntimeError("Задайте переменную окружения BOT_TOKEN")
+    proxy_url = os.getenv("SOCKS_PROXY_URL")
 
     # Ресурсы должны быть готовы до первого импорта BingoImageBuilder:
     # изображения сохраняются в полях его класса.
@@ -65,7 +68,7 @@ async def main() -> None:
     database = DatabaseConnection()
     try:
         await database.get_connection()
-        bot = Bot(token=token)
+        bot = Bot(token=token, proxy_url=proxy_url)
         await dispatcher.start_polling(bot.aiogram_bot)
     finally:
         # Закрываем БД и при ошибке подготовки таблиц или запуска бота.
